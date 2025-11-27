@@ -7,6 +7,7 @@ from datetime import datetime
 from pynput import mouse, keyboard
 from pynput.keyboard import Key, Controller as KeyboardController
 from pathlib import Path
+from i18n import get_i18n, t
 
 # Configurações de segurança do PyAutoGUI
 pyautogui.FAILSAFE = True
@@ -23,24 +24,25 @@ class TaskRecorder:
         self.mouse_listener = None
         self.keyboard_listener = None
         self.last_saved_file = None
+        self.i18n = get_i18n()  # Sistema de tradução
         try:
             self.keyboard_controller = KeyboardController()
         except Exception as e:
-            print(f"⚠️ Aviso: Erro ao inicializar KeyboardController: {e}")
+            print(self.i18n.t('messages.warning_keyboard_controller', error=str(e)))
             self.keyboard_controller = None
         
     def start_recording(self):
         """Inicia a gravação das ações"""
         if self.recording:
-            print("⚠️ Já está gravando!")
+            print(self.i18n.t('messages.already_recording'))
             return
             
-        print("🎥 Gravando em 3 segundos...")
+        print(self.i18n.t('messages.recording', seconds=3))
         for i in range(3, 0, -1):
-            print(f"   {i}...")
+            print(self.i18n.t('messages.recording_countdown', count=i))
             time.sleep(1)
         
-        print("🔴 GRAVANDO! Pressione \\ para parar.")
+        print(self.i18n.t('messages.recording_started'))
         
         self.recording = True
         self.actions = []
@@ -104,7 +106,8 @@ class TaskRecorder:
                 'button': str(button).split('.')[-1]  # 'left', 'right', 'middle'
             }
             self.actions.append(action)
-            print(f"   📍 Clique {button} em ({x}, {y})")
+            button_name = str(button).split('.')[-1]
+            print(self.i18n.t('messages.click_at', button=button_name, x=x, y=y))
     
     def _on_mouse_scroll(self, x, y, dx, dy):
         """Captura scroll do mouse"""
@@ -122,7 +125,7 @@ class TaskRecorder:
             'dy': dy
         }
         self.actions.append(action)
-        print(f"   📜 Scroll em ({x}, {y})")
+        print(self.i18n.t('messages.scroll_at', x=x, y=y))
     
     def _key_to_string(self, key):
         """Converte uma tecla do pynput para string legível"""
@@ -175,7 +178,7 @@ class TaskRecorder:
             'key_obj': str(key)  # Para debug
         }
         self.actions.append(action)
-        print(f"   ⌨️ Tecla pressionada: {key_str}")
+        print(self.i18n.t('messages.key_pressed', key=key_str))
     
     def _on_key_release(self, key):
         """Captura teclas soltas durante a gravação (opcional, para maior precisão)"""
@@ -203,8 +206,8 @@ class TaskRecorder:
         if self.keyboard_listener:
             self.keyboard_listener.stop()
         
-        print("⏹️ Gravação parada.")
-        print(f"📊 Total de ações gravadas: {len(self.actions)}")
+        print(self.i18n.t('messages.recording_stopped'))
+        print(self.i18n.t('messages.total_actions', count=len(self.actions)))
         self.save_recording()
     
     def _get_recordings_dir(self):
@@ -229,14 +232,14 @@ class TaskRecorder:
                     current_dir.mkdir(exist_ok=True)
                     return current_dir
                 except (PermissionError, OSError) as e:
-                    print(f"❌ Erro ao criar diretório de gravações: {e}")
+                    print(self.i18n.t('messages.error_creating_dir', error=str(e)))
                     # Retorna None e salva no diretório atual
                     return Path.cwd()
     
     def save_recording(self):
         """Salva as ações em arquivo JSON"""
         if not self.actions:
-            print("⚠️ Nenhuma ação para salvar!")
+            print(self.i18n.t('messages.no_actions_to_save'))
             return
             
         filename = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
@@ -258,21 +261,21 @@ class TaskRecorder:
                 json.dump(recording_data, f, indent=2, ensure_ascii=False)
             
             self.last_saved_file = str(filepath)
-            print(f"💾 Ações salvas em {filepath}")
+            print(self.i18n.t('messages.actions_saved', path=str(filepath)))
             return str(filepath)
         except (PermissionError, OSError) as e:
-            print(f"❌ Erro ao salvar arquivo: {e}")
-            print(f"   Tentando salvar no diretório atual...")
+            print(self.i18n.t('messages.error_saving', error=str(e)))
+            print(self.i18n.t('messages.trying_current_dir'))
             # Tenta salvar no diretório atual como último recurso
             try:
                 filepath = Path.cwd() / filename
                 with open(filepath, 'w', encoding='utf-8') as f:
                     json.dump(recording_data, f, indent=2, ensure_ascii=False)
                 self.last_saved_file = str(filepath)
-                print(f"💾 Ações salvas em {filepath}")
+                print(self.i18n.t('messages.actions_saved', path=str(filepath)))
                 return str(filepath)
             except Exception as e2:
-                print(f"❌ Erro crítico ao salvar: {e2}")
+                print(self.i18n.t('messages.critical_save_error', error=str(e2)))
                 return None
     
     def _find_recordings_dir(self):
@@ -307,12 +310,12 @@ class TaskRecorder:
                 json_files = list(recordings_dir.glob("task_*.json"))
                 if json_files:
                     filename = str(max(json_files, key=lambda p: p.stat().st_mtime))
-                    print(f"📂 Carregando arquivo mais recente: {filename}")
+                    print(self.i18n.t('messages.loading_recent', filename=filename))
                 else:
-                    print("❌ Nenhum arquivo de gravação encontrado!")
+                    print(self.i18n.t('messages.no_recording_found'))
                     return False
             else:
-                print("❌ Diretório de gravações não existe!")
+                print(self.i18n.t('messages.recordings_dir_not_exists'))
                 return False
         
         try:
@@ -320,27 +323,27 @@ class TaskRecorder:
                 data = json.load(f)
                 self.actions = data.get('actions', data)  # Compatibilidade com formato antigo
                 self.last_saved_file = filename
-                print(f"✅ Gravação carregada: {len(self.actions)} ações")
+                print(self.i18n.t('messages.recording_loaded', count=len(self.actions)))
                 return True
         except FileNotFoundError:
-            print(f"❌ Arquivo não encontrado: {filename}")
+            print(self.i18n.t('messages.file_not_found', filename=filename))
             return False
         except json.JSONDecodeError:
-            print(f"❌ Erro ao ler arquivo JSON: {filename}")
+            print(self.i18n.t('messages.json_error', filename=filename))
             return False
     
     def play_recording(self, loops=1, delay=1, speed=1.0):
         """Reproduz a gravação"""
         if not self.actions:
-            print("❌ Nenhuma gravação carregada!")
+            print(self.i18n.t('messages.no_recording_loaded'))
             return
         
         if self.playing:
-            print("⚠️ Já está reproduzindo!")
+            print(self.i18n.t('messages.already_playing'))
             return
         
-        print(f"🎬 Reproduzindo {loops} vez(es) (velocidade: {speed}x)...")
-        print("   Pressione \\ para parar a reprodução")
+        print(self.i18n.t('messages.playing', loops=loops, speed=speed))
+        print(self.i18n.t('messages.press_backslash_to_stop'))
         
         # Listener para parar reprodução
         stop_listener = keyboard.Listener(on_press=self._on_key_press_stop)
@@ -351,7 +354,7 @@ class TaskRecorder:
                 if not self.playing and loop > 0:
                     break
                     
-                print(f"\n🔁 Loop {loop + 1}/{loops}")
+                print(self.i18n.t('messages.loop', current=loop + 1, total=loops))
                 self.playing = True
                 
                 start_time = time.time()
@@ -359,7 +362,7 @@ class TaskRecorder:
                 
                 for i, action in enumerate(self.actions):
                     if not self.playing:
-                        print("⏹️ Reprodução interrompida pelo usuário")
+                        print(self.i18n.t('messages.playback_interrupted'))
                         break
                     
                     # Calcula tempo preciso para a ação
@@ -394,12 +397,12 @@ class TaskRecorder:
                             self._reproduce_key(action)
                             
                     except Exception as e:
-                        print(f"⚠️ Erro ao executar ação {i}: {e}")
+                        print(self.i18n.t('messages.error_executing_action', index=i, error=str(e)))
                         continue
                 
                 # Delay entre loops
                 if loop < loops - 1 and self.playing:
-                    print(f"⏳ Aguardando {delay} segundos antes do próximo loop...")
+                    print(self.i18n.t('messages.waiting_before_next', delay=delay))
                     for _ in range(delay):
                         if not self.playing:
                             break
@@ -409,7 +412,7 @@ class TaskRecorder:
             stop_listener.stop()
             self.playing = False
         
-        print("\n✅ Execução concluída!")
+        print(self.i18n.t('messages.execution_complete'))
     
     def _on_key_press_stop(self, key):
         """Detecta tecla \ para parar reprodução"""
@@ -478,7 +481,7 @@ class TaskRecorder:
                     try:
                         pyautogui.press(key_lower)
                     except:
-                        print(f"   ⚠️ Tecla especial não mapeada: {key_str}")
+                        print(self.i18n.t('messages.unmapped_key', key=key_str))
             else:
                 # Para teclas normais (caracteres)
                 if len(key_str) == 1:
@@ -493,15 +496,15 @@ class TaskRecorder:
                     try:
                         pyautogui.press(key_str.lower())
                     except:
-                        print(f"   ⚠️ Erro ao pressionar tecla: {key_str}")
+                        print(self.i18n.t('messages.error_pressing_key', key=key_str))
         except Exception as e:
-            print(f"   ⚠️ Erro ao reproduzir tecla {key_str}: {e}")
+            print(self.i18n.t('messages.error_reproducing_key', key=key_str, error=str(e)))
     
     def stop_playing(self):
         """Para a reprodução"""
         if self.playing:
             self.playing = False
-            print("⏹️ Parando reprodução...")
+            print(self.i18n.t('messages.stopping_playback'))
 
 
 def is_key_pressed(key, target_char):
@@ -525,38 +528,40 @@ def is_key_pressed(key, target_char):
 
 def show_status(recorder):
     """Mostra status atual do gravador"""
+    i18n = get_i18n()
     status = []
     if recorder.recording:
-        status.append("🔴 GRAVANDO")
+        status.append(i18n.t('status.recording'))
     if recorder.playing:
-        status.append("▶️ REPRODUZINDO")
+        status.append(i18n.t('status.playing'))
     if not recorder.recording and not recorder.playing:
-        status.append("⚪ OCIOSO")
+        status.append(i18n.t('status.idle'))
     
-    return " | ".join(status) if status else "⚪ OCIOSO"
+    return " | ".join(status) if status else i18n.t('status.idle')
 
 
 def main():
+    i18n = get_i18n()
     try:
         recorder = TaskRecorder()
     except Exception as e:
-        print(f"❌ Erro ao inicializar TaskRecorder: {e}")
+        print(i18n.t('messages.error_initializing', error=str(e)))
         import traceback
         traceback.print_exc()
-        print("\n⚠️ Pressione Enter para fechar...")
+        print(i18n.t('messages.press_enter_to_close'))
         input()
         return
     
     print("=" * 60)
-    print("🤖 GRAVADOR DE TAREFAS AUTOMATIZADO")
+    print(f"🤖 {i18n.t('app.title')}")
     print("=" * 60)
-    print("\n📋 Controles:")
-    print("   ; (ponto e vírgula) - Gravar nova tarefa")
-    print("   \\ (barra invertida) - Parar gravação/reprodução")
-    print("   / (barra) - Reproduzir última gravação (1 vez)")
-    print("   F4 - Reproduzir última gravação (3 vezes)")
-    print("   F5 - Carregar gravação do arquivo")
-    print("   ESC - Sair")
+    print(f"\n📋 {i18n.t('app.controls')}")
+    print(f"   {i18n.t('controls.semicolon')}")
+    print(f"   {i18n.t('controls.backslash')}")
+    print(f"   {i18n.t('controls.slash')}")
+    print(f"   {i18n.t('controls.f4')}")
+    print(f"   {i18n.t('controls.f5')}")
+    print(f"   {i18n.t('controls.esc')}")
     print("\n" + "=" * 60)
     
     # Listener global para hotkeys
@@ -567,7 +572,7 @@ def main():
                 if not recorder.recording and not recorder.playing:
                     recorder.start_recording()
                 else:
-                    print("⚠️ Pare a gravação/reprodução atual primeiro!")
+                    print(i18n.t('messages.stop_current_first'))
                     
             # Detecta barra invertida (\) para parar
             elif is_key_pressed(key, '\\'):
@@ -576,7 +581,7 @@ def main():
                 elif recorder.playing:
                     recorder.stop_playing()
                 else:
-                    print("ℹ️ Nenhuma operação ativa para parar")
+                    print(i18n.t('messages.no_active_operation'))
                     
             # Detecta barra (/) para reproduzir
             elif is_key_pressed(key, '/'):
@@ -584,35 +589,35 @@ def main():
                     if recorder.actions or recorder.load_recording():
                         recorder.play_recording(loops=1, delay=0, speed=1.0)
                     else:
-                        print("❌ Nenhuma gravação disponível!")
+                        print(i18n.t('messages.no_recording_available'))
                 else:
-                    print("⚠️ Pare a operação atual primeiro!")
+                    print(i18n.t('messages.stop_operation_first'))
                     
             elif key == keyboard.Key.f4:
                 if not recorder.recording and not recorder.playing:
                     if recorder.actions or recorder.load_recording():
                         recorder.play_recording(loops=3, delay=2, speed=1.0)
                     else:
-                        print("❌ Nenhuma gravação disponível!")
+                        print(i18n.t('messages.no_recording_available'))
                 else:
-                    print("⚠️ Pare a operação atual primeiro!")
+                    print(i18n.t('messages.stop_operation_first'))
                     
             elif key == keyboard.Key.f5:
                 if not recorder.recording and not recorder.playing:
-                    filename = input("\n📂 Digite o nome do arquivo (ou Enter para o mais recente): ").strip()
+                    filename = input(i18n.t('messages.enter_filename')).strip()
                     if filename:
                         recorder.load_recording(filename)
                     else:
                         recorder.load_recording()
                 else:
-                    print("⚠️ Pare a operação atual primeiro!")
+                    print(i18n.t('messages.stop_operation_first'))
                     
             elif key == keyboard.Key.esc:
                 if recorder.recording:
                     recorder.stop_recording()
                 if recorder.playing:
                     recorder.stop_playing()
-                print("\n👋 Saindo...")
+                print(i18n.t('messages.exiting'))
                 return False
                 
         except AttributeError:
@@ -625,13 +630,13 @@ def main():
     try:
         listener = keyboard.Listener(on_press=on_key_press)
         listener.start()
-        print("✅ Listener de teclado iniciado com sucesso!")
-        print("⏳ Aguardando comandos...\n")
+        print(i18n.t('messages.keyboard_listener_started'))
+        print(i18n.t('messages.waiting_commands'))
     except Exception as e:
-        print(f"❌ Erro ao iniciar listener de teclado: {e}")
+        print(i18n.t('messages.error_starting_listener', error=str(e)))
         import traceback
         traceback.print_exc()
-        print("\n⚠️ Pressione Enter para fechar...")
+        print(i18n.t('messages.press_enter_to_close'))
         input()
         return
     
@@ -642,19 +647,19 @@ def main():
             try:
                 current_status = show_status(recorder)
                 if current_status != last_status:
-                    print(f"\n📊 Status: {current_status}")
+                    print(f"\n📊 {i18n.t('app.status')} {current_status}")
                     last_status = current_status
                 time.sleep(0.5)
             except Exception as e:
-                print(f"\n⚠️ Erro no loop principal: {e}")
+                print(i18n.t('messages.error_main_loop', error=str(e)))
                 import traceback
                 traceback.print_exc()
                 time.sleep(1)
             
     except KeyboardInterrupt:
-        print("\n👋 Saindo...")
+        print(i18n.t('messages.exiting'))
     except Exception as e:
-        print(f"\n❌ Erro durante execução: {e}")
+        print(i18n.t('messages.error_during_execution', error=str(e)))
         import traceback
         traceback.print_exc()
     finally:
@@ -670,17 +675,18 @@ def main():
 
 
 if __name__ == "__main__":
+    i18n = get_i18n()
     try:
         main()
     except Exception as e:
-        print(f"\n❌ Erro crítico: {e}")
+        print(i18n.t('messages.critical_error', error=str(e)))
         import traceback
-        print("\n📋 Detalhes do erro:")
+        print(i18n.t('messages.error_details'))
         traceback.print_exc()
-        print("\n⚠️ Pressione Enter para fechar...")
+        print(i18n.t('messages.press_enter_to_close'))
         input()
     else:
         # Se sair normalmente, também pausa para ver mensagens
-        print("\n⚠️ Pressione Enter para fechar...")
+        print(i18n.t('messages.press_enter_to_close'))
         input()
 
